@@ -1,0 +1,13 @@
+{
+  "name": "@gitpush/ci-scripts",
+  "version": "1.0.0",
+  "description": "Scripts CI pour la compilation automatique avec correction IA",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0"
+  }
+}
