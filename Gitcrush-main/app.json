@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Gitcrush",
+    "slug": "gitcrush",
+    "owner": "lolilo9",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "gitcrush",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0d1117"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.loxyapping.gitcrush"
+    },
+    "android": {
+      "package": "com.loxyapping.gitcrush"
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-web-browser",
+      "./plugins/withLargeHeap.js"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6a0f27cc-5b85-4865-a52b-9b7adfcb99de"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/6a0f27cc-5b85-4865-a52b-9b7adfcb99de"
+    }
+  }
+}
