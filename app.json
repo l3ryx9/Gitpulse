@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "Vocai",
+    "slug": "vocai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "vocai",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#080B12"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.vocai.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Vocai utilise le microphone pour enregistrer des messages vocaux.",
+        "NSCameraUsageDescription": "Vocai peut utiliser la caméra pour les photos de profil."
+      }
+    },
+    "android": {
+      "package": "com.vocai.app",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "SCHEDULE_EXACT_ALARM",
+        "POST_NOTIFICATIONS"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#080B12"
+      }
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Vocai utilise le microphone pour enregistrer des messages vocaux."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#00D9B8",
+          "sounds": [],
+          "defaultChannel": "messages",
+          "androidMode": "default"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "44e5eabb-9035-4553-815d-281851e08e95"
+      }
+    },
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
