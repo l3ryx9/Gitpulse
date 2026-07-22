@@ -1,0 +1,168 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Type de build (debug | release)'
+        required: false
+        default: 'release'
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APK Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      BUILD_TYPE: ${{ github.event.inputs.build_type || 'release' }}
+      GRADLE_OPTS: -Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout du code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 2. Java 17 ───────────────────────────────────────────────────────────
+      - name: Configuration JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # ── 3. Node.js 20 ────────────────────────────────────────────────────────
+      - name: Configuration Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── 4. pnpm ──────────────────────────────────────────────────────────────
+      - name: Installation pnpm
+        run: npm install -g pnpm@9 expo-cli @expo/cli
+
+      # ── 5. Patch package.json (supprime les @workspace/* non disponibles en CI)
+      - name: Préparation du projet pour CI
+        run: node ci/prepare.js
+
+      # ── 6. Installation des dépendances ──────────────────────────────────────
+      - name: Installation des dépendances npm
+        run: npm install --legacy-peer-deps
+        env:
+          npm_config_fund: false
+          npm_config_audit: false
+
+      # ── 7. Installation des dépendances CI (Gemini SDK)
+      - name: Installation des dépendances CI
+        run: |
+          cd ci
+          npm install --legacy-peer-deps
+
+      # ── 8. Acceptation des licences Android SDK (SDK pré-installé sur le runner)
+      - name: Acceptation des licences SDK
+        run: |
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+
+      # ── 9. Décodage du keystore de signature ─────────────────────────────────
+      - name: Décodage du keystore release
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+            echo "ANDROID_KEYSTORE_FILE=${{ github.workspace }}/android/app/release.keystore" >> $GITHUB_ENV
+            echo "✅ Keystore release décodé"
+          else
+            echo "⚠️ ANDROID_KEYSTORE_BASE64 non défini — signature debug utilisée"
+          fi
+
+      # ── 10. Cache Gradle ─────────────────────────────────────────────────────
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # ── 11. Expo Prebuild ─────────────────────────────────────────────────────
+      - name: Génération du projet natif Android (expo prebuild)
+        run: |
+          npx expo prebuild --platform android --clean --no-install 2>&1
+        env:
+          CI: true
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+
+      # ── 11b. Forcer local.properties avec le bon chemin SDK ──────────────────
+      - name: Synchronisation android/local.properties
+        run: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          echo "✓ local.properties → sdk.dir=$ANDROID_SDK_ROOT"
+
+      # ── 12. Build + Retry automatique via IA ─────────────────────────────────
+      - name: Build APK avec auto-correction IA
+        id: build
+        run: node ci/retryBuild.js
+        env:
+          BUILD_TYPE: ${{ env.BUILD_TYPE }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CI: true
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+
+      # ── 13. Upload APK ────────────────────────────────────────────────────────
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GitPush-${{ env.BUILD_TYPE }}-${{ github.run_number }}
+          path: |
+            android/app/build/outputs/apk/**/*.apk
+          retention-days: 30
+
+      # ── 14. Upload logs en cas d'échec ────────────────────────────────────────
+      - name: Upload logs d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-logs-${{ github.run_number }}
+          path: |
+            ci/logs/
+          retention-days: 7
+
+      # ── 15. Résumé ────────────────────────────────────────────────────────────
+      - name: Résumé du build
+        if: always()
+        run: |
+          if [ -f ci/logs/build-summary.json ]; then
+            echo "### 📊 Résumé du Build" >> $GITHUB_STEP_SUMMARY
+            node -e "
+              const s = require('./ci/logs/build-summary.json');
+              const emoji = s.success ? '✅' : '❌';
+              console.log(\`## \${emoji} Build \${s.success ? 'réussi' : 'échoué'}\`);
+              console.log(\`- **Tentatives:** \${s.attempts}/\${s.maxAttempts}\`);
+              console.log(\`- **Durée totale:** \${s.totalDuration}s\`);
+              if (s.apkPath) console.log(\`- **APK:** \${s.apkPath}\`);
+              if (s.fixes && s.fixes.length > 0) {
+                console.log(\`\n### 🤖 Corrections IA appliquées (\${s.fixes.length})\`);
+                s.fixes.forEach((f, i) => console.log(\`\${i+1}. \${f.explanation?.slice(0, 120)}\`));
+              }
+            " >> $GITHUB_STEP_SUMMARY
+          fi
